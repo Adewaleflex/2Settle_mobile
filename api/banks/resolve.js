@@ -1,5 +1,5 @@
-const UPSTREAM_URL = "https://api.2settle.io/banks/resolve";
-const DEFAULT_UPSTREAM_PATH = "/banks/resolve";
+const UPSTREAM_URL = "https://api.2settle.io/v1/banks/resolve";
+const DEFAULT_UPSTREAM_PATH = "/v1/banks/resolve";
 
 import crypto from "node:crypto";
 
