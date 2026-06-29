@@ -1,5 +1,5 @@
 const UPSTREAM_URL = "https://api.2settle.io/banks/resolve";
-const UPSTREAM_PATH = "/banks/resolve";
+const UPSTREAM_PATHS = ["/banks/resolve", "/api/banks/resolve", "/v1/banks/resolve"];
 
 import crypto from "node:crypto";
 
@@ -17,6 +17,59 @@ function pickString(source, keys) {
     if (typeof value === "string" && value.trim()) return value.trim();
   }
   return null;
+}
+
+function signRequest({ secretKey, method, path, timestamp, body }) {
+  const signaturePayload = [method, path, timestamp, body].join("\n");
+  return crypto
+    .createHmac("sha256", secretKey)
+    .update(signaturePayload)
+    .digest("hex");
+}
+
+function isSignatureError(status, data) {
+  const message = pickString(data, ["error", "message"]) || "";
+  return status === 401 && /signature/i.test(message);
+}
+
+async function resolveWithUpstream({ apiKey, secretKey, payload }) {
+  let lastResponse = null;
+
+  for (const bodyPayload of payload) {
+    const body = JSON.stringify(bodyPayload);
+
+    for (const path of UPSTREAM_PATHS) {
+      const timestamp = Date.now().toString();
+      const signature = signRequest({
+        secretKey,
+        method: "POST",
+        path,
+        timestamp,
+        body,
+      });
+
+      const upstream = await fetch(UPSTREAM_URL, {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "content-type": "application/json",
+          "x-api-key": apiKey,
+          "x-timestamp": timestamp,
+          "x-signature": signature,
+        },
+        body,
+      });
+
+      const data = await upstream.json().catch(() => ({}));
+      lastResponse = { upstream, data };
+
+      if (!isSignatureError(upstream.status, data)) {
+        return lastResponse;
+      }
+    }
+  }
+
+  return lastResponse;
 }
 
 export default async function handler(req, res) {
@@ -58,35 +111,21 @@ export default async function handler(req, res) {
       });
     }
 
-    const body = JSON.stringify({
-      bankCode,
-      accountNumber,
-      bank_code: bankCode,
-      account_number: accountNumber,
-    });
-    const timestamp = Date.now().toString();
-    const signaturePayload = ["POST", UPSTREAM_PATH, timestamp, body].join("\n");
-    const signature = crypto
-      .createHmac("sha256", secretKey)
-      .update(signaturePayload)
-      .digest("hex");
-
-    const upstream = await fetch(UPSTREAM_URL, {
-      method: "POST",
-      headers: {
-        accept: "application/json",
-        "content-type": "application/json",
-        "x-api-key": apiKey,
-        "x-timestamp": timestamp,
-        "x-signature": signature,
-      },
-      body,
+    const resolved = await resolveWithUpstream({
+      apiKey,
+      secretKey,
+      payload: [
+        { bankCode, accountNumber },
+        { bank_code: bankCode, account_number: accountNumber },
+        { bankCode, accountNumber, bank_code: bankCode, account_number: accountNumber },
+      ],
     });
 
-    const data = await upstream.json().catch(() => ({}));
+    const upstream = resolved?.upstream;
+    const data = resolved?.data || {};
 
-    if (!upstream.ok) {
-      return json(res, upstream.status, {
+    if (!upstream?.ok) {
+      return json(res, upstream?.status || 502, {
         ok: false,
         error:
           pickString(data, ["error", "message"]) ||
