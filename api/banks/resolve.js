@@ -33,7 +33,7 @@ function hmac(secretKey, payload, encoding = "hex") {
 }
 
 function buildPayload({ bankCode, accountNumber }) {
-  const bodyStyle = cleanEnv(process.env.TWOSETTLE_BODY_STYLE) || "camel";
+  const bodyStyle = cleanEnv(process.env.TWOSETTLE_BODY_STYLE);
 
   if (bodyStyle === "snake") {
     return { bank_code: bankCode, account_number: accountNumber };
@@ -46,8 +46,22 @@ function buildPayload({ bankCode, accountNumber }) {
   return { bankCode, accountNumber };
 }
 
+function buildPayloadCandidates({ bankCode, accountNumber }) {
+  const bodyStyle = cleanEnv(process.env.TWOSETTLE_BODY_STYLE);
+
+  if (bodyStyle) {
+    return [buildPayload({ bankCode, accountNumber })];
+  }
+
+  return [
+    { bankCode, accountNumber },
+    { bank_code: bankCode, account_number: accountNumber },
+    { bankCode, accountNumber, bank_code: bankCode, account_number: accountNumber },
+  ];
+}
+
 function buildTimestamp() {
-  const timestampUnit = cleanEnv(process.env.TWOSETTLE_TIMESTAMP_UNIT) || "seconds";
+  const timestampUnit = cleanEnv(process.env.TWOSETTLE_TIMESTAMP_UNIT) || "milliseconds";
   return timestampUnit === "seconds"
     ? Math.floor(Date.now() / 1000).toString()
     : Date.now().toString();
@@ -70,30 +84,41 @@ function signRequest({ secretKey, method, path, timestamp, body }) {
 
 async function resolveWithUpstream({ apiKey, secretKey, bankCode, accountNumber }) {
   const path = cleanEnv(process.env.TWOSETTLE_SIGNATURE_PATH) || DEFAULT_UPSTREAM_PATH;
-  const timestamp = buildTimestamp();
-  const body = JSON.stringify(buildPayload({ bankCode, accountNumber }));
-  const signature = signRequest({
-    secretKey,
-    method: "POST",
-    path,
-    timestamp,
-    body,
-  });
+  let lastResponse = null;
 
-  const upstream = await fetch(UPSTREAM_URL, {
-    method: "POST",
-    headers: {
-      accept: "application/json",
-      "content-type": "application/json",
-      "x-api-key": apiKey,
-      "x-timestamp": timestamp,
-      "x-signature": signature,
-    },
-    body,
-  });
+  for (const payload of buildPayloadCandidates({ bankCode, accountNumber })) {
+    const timestamp = buildTimestamp();
+    const body = JSON.stringify(payload);
+    const signature = signRequest({
+      secretKey,
+      method: "POST",
+      path,
+      timestamp,
+      body,
+    });
 
-  const data = await upstream.json().catch(() => ({}));
-  return { upstream, data };
+    const upstream = await fetch(UPSTREAM_URL, {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
+        "x-api-key": apiKey,
+        "x-timestamp": timestamp,
+        "x-signature": signature,
+      },
+      body,
+    });
+
+    const data = await upstream.json().catch(() => ({}));
+    lastResponse = { upstream, data };
+
+    const message = pickString(data, ["error", "message"]) || "";
+    if (!(upstream.status === 401 && /signature/i.test(message))) {
+      return lastResponse;
+    }
+  }
+
+  return lastResponse;
 }
 
 export default async function handler(req, res) {
