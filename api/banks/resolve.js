@@ -68,8 +68,19 @@ function buildTimestamp() {
 }
 
 function signRequest({ secretKey, method, path, timestamp, body }) {
-  const signatureMode = cleanEnv(process.env.TWOSETTLE_SIGNATURE_MODE) || "method-path-timestamp-body";
+  const signatureMode = cleanEnv(process.env.TWOSETTLE_SIGNATURE_MODE) || "postman-bodyhash";
   const signatureEncoding = cleanEnv(process.env.TWOSETTLE_SIGNATURE_ENCODING) || "hex";
+
+  if (signatureMode === "postman-bodyhash") {
+    const bodyHash = crypto.createHash("sha256").update(body).digest("hex");
+    const payload = `${timestamp}|${method}|${path}|${bodyHash}`;
+    const hmacKey = crypto.createHash("sha256").update(secretKey).digest("hex");
+    const digest = hmac(hmacKey, payload, signatureEncoding);
+
+    return cleanEnv(process.env.TWOSETTLE_SIGNATURE_PREFIX) === "sha256"
+      ? `sha256=${digest}`
+      : digest;
+  }
 
   const payload =
     signatureMode === "timestamp-dot-body"
@@ -90,7 +101,7 @@ function resolverDiagnostics() {
     bodyStyle: cleanEnv(process.env.TWOSETTLE_BODY_STYLE) || "auto",
     signatureMode:
       cleanEnv(process.env.TWOSETTLE_SIGNATURE_MODE) ||
-      "method-path-timestamp-body",
+      "postman-bodyhash",
     signatureEncoding: cleanEnv(process.env.TWOSETTLE_SIGNATURE_ENCODING) || "hex",
     signaturePrefix: cleanEnv(process.env.TWOSETTLE_SIGNATURE_PREFIX) || "none",
   };
