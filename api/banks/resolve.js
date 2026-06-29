@@ -33,7 +33,7 @@ function hmac(secretKey, payload, encoding = "hex") {
 }
 
 function buildPayload({ bankCode, accountNumber }) {
-  const bodyStyle = cleanEnv(process.env.TWOSETTLE_BODY_STYLE);
+  const bodyStyle = cleanEnv(process.env.TWOSETTLE_BODY_STYLE) || "snake";
 
   if (bodyStyle === "snake") {
     return { bank_code: bankCode, account_number: accountNumber };
@@ -49,15 +49,9 @@ function buildPayload({ bankCode, accountNumber }) {
 function buildPayloadCandidates({ bankCode, accountNumber }) {
   const bodyStyle = cleanEnv(process.env.TWOSETTLE_BODY_STYLE);
 
-  if (bodyStyle) {
-    return [buildPayload({ bankCode, accountNumber })];
-  }
-
-  return [
-    { bankCode, accountNumber },
-    { bank_code: bankCode, account_number: accountNumber },
-    { bankCode, accountNumber, bank_code: bankCode, account_number: accountNumber },
-  ];
+  return bodyStyle
+    ? [buildPayload({ bankCode, accountNumber })]
+    : [{ bank_code: bankCode, account_number: accountNumber }];
 }
 
 function buildTimestamp() {
@@ -98,7 +92,7 @@ function resolverDiagnostics() {
     upstreamUrl: UPSTREAM_URL,
     signaturePath: cleanEnv(process.env.TWOSETTLE_SIGNATURE_PATH) || DEFAULT_UPSTREAM_PATH,
     timestampUnit: cleanEnv(process.env.TWOSETTLE_TIMESTAMP_UNIT) || "milliseconds",
-    bodyStyle: cleanEnv(process.env.TWOSETTLE_BODY_STYLE) || "auto",
+    bodyStyle: cleanEnv(process.env.TWOSETTLE_BODY_STYLE) || "snake",
     signatureMode:
       cleanEnv(process.env.TWOSETTLE_SIGNATURE_MODE) ||
       "postman-bodyhash",
