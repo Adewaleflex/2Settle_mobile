@@ -64,7 +64,7 @@ export default async function handler(req, res) {
       bank_code: bankCode,
       account_number: accountNumber,
     });
-    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const timestamp = Date.now().toString();
     const signaturePayload = ["POST", UPSTREAM_PATH, timestamp, body].join("\n");
     const signature = crypto
       .createHmac("sha256", secretKey)
