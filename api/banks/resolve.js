@@ -28,6 +28,10 @@ export default async function handler(req, res) {
     return json(res, 500, {
       ok: false,
       error: "Bank resolver is not configured.",
+      missing: {
+        TWOSETTLE_API_KEY: !apiKey,
+        TWOSETTLE_SECRET_KEY: !secretKey,
+      },
     });
   }
 
