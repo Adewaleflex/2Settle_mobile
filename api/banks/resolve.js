@@ -47,7 +47,7 @@ function buildPayload({ bankCode, accountNumber }) {
 }
 
 function buildTimestamp() {
-  const timestampUnit = cleanEnv(process.env.TWOSETTLE_TIMESTAMP_UNIT) || "milliseconds";
+  const timestampUnit = cleanEnv(process.env.TWOSETTLE_TIMESTAMP_UNIT) || "seconds";
   return timestampUnit === "seconds"
     ? Math.floor(Date.now() / 1000).toString()
     : Date.now().toString();
