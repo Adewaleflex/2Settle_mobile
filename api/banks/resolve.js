@@ -1,5 +1,6 @@
 const UPSTREAM_URL = "https://api.2settle.io/banks/resolve";
 const UPSTREAM_PATHS = ["/banks/resolve", "/api/banks/resolve", "/v1/banks/resolve"];
+const SIGNATURE_ENCODINGS = ["hex", "base64"];
 
 import crypto from "node:crypto";
 
@@ -19,12 +20,33 @@ function pickString(source, keys) {
   return null;
 }
 
-function signRequest({ secretKey, method, path, timestamp, body }) {
-  const signaturePayload = [method, path, timestamp, body].join("\n");
+function hmac(secretKey, payload, encoding) {
   return crypto
     .createHmac("sha256", secretKey)
-    .update(signaturePayload)
-    .digest("hex");
+    .update(payload)
+    .digest(encoding);
+}
+
+function signatureCandidates({ secretKey, method, path, timestamp, body }) {
+  const payloads = [
+    [method, path, timestamp, body].join("\n"),
+    [method.toUpperCase(), path, timestamp, body].join("\n"),
+    [method, path, timestamp].join("\n"),
+    `${timestamp}.${body}`,
+    [timestamp, body].join("\n"),
+    body,
+  ];
+  const uniquePayloads = [...new Set(payloads)];
+  const signatures = [];
+
+  for (const payload of uniquePayloads) {
+    for (const encoding of SIGNATURE_ENCODINGS) {
+      const digest = hmac(secretKey, payload, encoding);
+      signatures.push(digest, `sha256=${digest}`);
+    }
+  }
+
+  return [...new Set(signatures)];
 }
 
 function isSignatureError(status, data) {
@@ -40,7 +62,7 @@ async function resolveWithUpstream({ apiKey, secretKey, payload }) {
 
     for (const path of UPSTREAM_PATHS) {
       const timestamp = Date.now().toString();
-      const signature = signRequest({
+      const signatures = signatureCandidates({
         secretKey,
         method: "POST",
         path,
@@ -48,23 +70,25 @@ async function resolveWithUpstream({ apiKey, secretKey, payload }) {
         body,
       });
 
-      const upstream = await fetch(UPSTREAM_URL, {
-        method: "POST",
-        headers: {
-          accept: "application/json",
-          "content-type": "application/json",
-          "x-api-key": apiKey,
-          "x-timestamp": timestamp,
-          "x-signature": signature,
-        },
-        body,
-      });
+      for (const signature of signatures) {
+        const upstream = await fetch(UPSTREAM_URL, {
+          method: "POST",
+          headers: {
+            accept: "application/json",
+            "content-type": "application/json",
+            "x-api-key": apiKey,
+            "x-timestamp": timestamp,
+            "x-signature": signature,
+          },
+          body,
+        });
 
-      const data = await upstream.json().catch(() => ({}));
-      lastResponse = { upstream, data };
+        const data = await upstream.json().catch(() => ({}));
+        lastResponse = { upstream, data };
 
-      if (!isSignatureError(upstream.status, data)) {
-        return lastResponse;
+        if (!isSignatureError(upstream.status, data)) {
+          return lastResponse;
+        }
       }
     }
   }
