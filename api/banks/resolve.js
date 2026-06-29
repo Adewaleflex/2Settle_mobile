@@ -82,6 +82,20 @@ function signRequest({ secretKey, method, path, timestamp, body }) {
     : digest;
 }
 
+function resolverDiagnostics() {
+  return {
+    upstreamUrl: UPSTREAM_URL,
+    signaturePath: cleanEnv(process.env.TWOSETTLE_SIGNATURE_PATH) || DEFAULT_UPSTREAM_PATH,
+    timestampUnit: cleanEnv(process.env.TWOSETTLE_TIMESTAMP_UNIT) || "milliseconds",
+    bodyStyle: cleanEnv(process.env.TWOSETTLE_BODY_STYLE) || "auto",
+    signatureMode:
+      cleanEnv(process.env.TWOSETTLE_SIGNATURE_MODE) ||
+      "method-path-timestamp-body",
+    signatureEncoding: cleanEnv(process.env.TWOSETTLE_SIGNATURE_ENCODING) || "hex",
+    signaturePrefix: cleanEnv(process.env.TWOSETTLE_SIGNATURE_PREFIX) || "none",
+  };
+}
+
 async function resolveWithUpstream({ apiKey, secretKey, bankCode, accountNumber }) {
   const path = cleanEnv(process.env.TWOSETTLE_SIGNATURE_PATH) || DEFAULT_UPSTREAM_PATH;
   let lastResponse = null;
@@ -176,6 +190,7 @@ export default async function handler(req, res) {
         error:
           pickString(data, ["error", "message"]) ||
           "Unable to resolve bank account.",
+        diagnostics: resolverDiagnostics(),
       });
     }
 
