@@ -19,6 +19,21 @@ function pickString(source, keys) {
   return null;
 }
 
+function pickDeepString(source, keys) {
+  const direct = pickString(source, keys);
+  if (direct) return direct;
+
+  for (const containerKey of ["data", "result", "account", "recipient"]) {
+    const nested = source?.[containerKey];
+    if (nested && typeof nested === "object") {
+      const nestedValue = pickString(nested, keys);
+      if (nestedValue) return nestedValue;
+    }
+  }
+
+  return null;
+}
+
 function cleanEnv(value) {
   return String(value || "")
     .trim()
@@ -202,12 +217,16 @@ export default async function handler(req, res) {
     return json(res, 200, {
       ok: true,
       valid: data.valid !== false,
-      accountName: pickString(data, [
+      accountName: pickDeepString(data, [
         "accountName",
         "account_name",
         "account_name_enquiry",
+        "account_name_enquiry_result",
+        "account_holder_name",
+        "accountHolderName",
+        "name",
       ]),
-      bankName: pickString(data, ["bankName", "bank_name"]),
+      bankName: pickDeepString(data, ["bankName", "bank_name", "bank", "institutionName"]),
       bankCode,
       accountNumber,
     });
