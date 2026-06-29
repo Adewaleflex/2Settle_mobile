@@ -1,4 +1,7 @@
 const UPSTREAM_URL = "https://api.2settle.io/banks/resolve";
+const UPSTREAM_PATH = "/banks/resolve";
+
+import crypto from "node:crypto";
 
 function json(res, status, body) {
   res.status(status).json(body);
@@ -55,20 +58,29 @@ export default async function handler(req, res) {
       });
     }
 
+    const body = JSON.stringify({
+      bankCode,
+      accountNumber,
+      bank_code: bankCode,
+      account_number: accountNumber,
+    });
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const signaturePayload = ["POST", UPSTREAM_PATH, timestamp, body].join("\n");
+    const signature = crypto
+      .createHmac("sha256", secretKey)
+      .update(signaturePayload)
+      .digest("hex");
+
     const upstream = await fetch(UPSTREAM_URL, {
       method: "POST",
       headers: {
         accept: "application/json",
         "content-type": "application/json",
         "x-api-key": apiKey,
-        "x-secret-key": secretKey,
+        "x-timestamp": timestamp,
+        "x-signature": signature,
       },
-      body: JSON.stringify({
-        bankCode,
-        accountNumber,
-        bank_code: bankCode,
-        account_number: accountNumber,
-      }),
+      body,
     });
 
     const data = await upstream.json().catch(() => ({}));

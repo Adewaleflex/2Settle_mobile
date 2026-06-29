@@ -7,7 +7,7 @@ Small Vercel proxy for the 2Settle mobile app.
 Set these in Vercel, not in the repository:
 
 - `TWOSETTLE_API_KEY`
-- `TWOSETTLE_SECRET_KEY`
+- `TWOSETTLE_SECRET_KEY` - used only on the server to sign upstream requests
 
 ## Endpoint
 
