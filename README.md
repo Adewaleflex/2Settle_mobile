@@ -25,7 +25,8 @@ Request:
 `GET /api/gifts/:reference`
 
 The reference can be sent as `2S-AND6DF` or `AND6DF`; the proxy normalizes it to
-the full `2S-XXXXXX` format before signing the upstream request.
+the full `2S-XXXXXX` format before signing the upstream `GET
+/v1/payments/:reference` request.
 
 Response:
 

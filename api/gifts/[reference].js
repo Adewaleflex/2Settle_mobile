@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 
-const UPSTREAM_BASE_URL = "https://api.2settle.io/v1/payments/gifts";
-const DEFAULT_UPSTREAM_BASE_PATH = "/v1/payments/gifts";
+const UPSTREAM_BASE_URL = "https://api.2settle.io/v1/payments";
+const DEFAULT_UPSTREAM_BASE_PATH = "/v1/payments";
 
 function json(res, status, body) {
   res.status(status).json(body);
