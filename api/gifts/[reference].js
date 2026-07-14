@@ -84,6 +84,22 @@ function pickDeepValue(source, keys) {
   return null;
 }
 
+function findDeepValue(source, keys) {
+  if (!source || typeof source !== "object") return null;
+
+  const direct = pickValue(source, keys);
+  if (direct) return direct;
+
+  for (const value of Object.values(source)) {
+    if (value && typeof value === "object") {
+      const nested = findDeepValue(value, keys);
+      if (nested) return nested;
+    }
+  }
+
+  return null;
+}
+
 function proxyDiagnostics(path) {
   return {
     upstreamUrl: UPSTREAM_BASE_URL,
@@ -179,6 +195,17 @@ export default async function handler(req, res) {
           "settlement_currency",
         ]) || "NGN",
       status: pickDeepValue(data, ["status", "state"]),
+      claimedBankName: findDeepValue(data, [
+        "bankName",
+        "bank_name",
+        "receiverBankName",
+        "receiver_bank_name",
+        "settlementBankName",
+        "settlement_bank_name",
+        "destinationBankName",
+        "destination_bank_name",
+        "institutionName",
+      ]),
       gift: data.data || data.gift || data.result || data,
     });
   } catch {
