@@ -163,6 +163,8 @@ export default async function handler(req, res) {
         "amount",
         "amountNgn",
         "amount_ngn",
+        "fiatAmount",
+        "fiat_amount",
         "settlementAmount",
         "settlement_amount",
         "value",
@@ -170,6 +172,8 @@ export default async function handler(req, res) {
       currency:
         pickDeepValue(data, [
           "currency",
+          "fiatCurrency",
+          "fiat_currency",
           "settlementCurrency",
           "settlement_currency",
         ]) || "NGN",
