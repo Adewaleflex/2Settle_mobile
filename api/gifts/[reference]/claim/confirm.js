@@ -4,6 +4,7 @@ const UPSTREAM_BASE_URL = "https://api.2settle.io/v1/payments/gifts";
 const DEFAULT_UPSTREAM_BASE_PATH = "/v1/payments/gifts";
 
 function json(res, status, body) {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   res.status(status).json(body);
 }
 
