@@ -83,6 +83,103 @@ function proxyDiagnostics(path) {
   };
 }
 
+function buildPayloadCandidates({ bankCode, accountNumber }) {
+  return [
+    {
+      receiver: {
+        bankCode,
+        accountNumber,
+      },
+    },
+    {
+      receiver: {
+        bank_code: bankCode,
+        account_number: accountNumber,
+      },
+    },
+    {
+      bankCode,
+      accountNumber,
+    },
+    {
+      bank_code: bankCode,
+      account_number: accountNumber,
+    },
+    {
+      destination: {
+        bankCode,
+        accountNumber,
+      },
+    },
+    {
+      destination: {
+        bank_code: bankCode,
+        account_number: accountNumber,
+      },
+    },
+    {
+      settlement: {
+        bankCode,
+        accountNumber,
+      },
+    },
+    {
+      settlement: {
+        bank_code: bankCode,
+        account_number: accountNumber,
+      },
+    },
+  ];
+}
+
+async function confirmClaimWithUpstream({
+  apiKey,
+  secretKey,
+  reference,
+  bankCode,
+  accountNumber,
+}) {
+  const encodedReference = encodeURIComponent(reference);
+  const path = `${DEFAULT_UPSTREAM_BASE_PATH}/${encodedReference}/claim/confirm`;
+  let lastResponse = null;
+
+  for (const payload of buildPayloadCandidates({ bankCode, accountNumber })) {
+    const body = JSON.stringify(payload);
+    const timestamp = buildTimestamp();
+    const signature = signRequest({
+      secretKey,
+      method: "POST",
+      path,
+      timestamp,
+      body,
+    });
+
+    const upstream = await fetch(
+      `${UPSTREAM_BASE_URL}/${encodedReference}/claim/confirm`,
+      {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "content-type": "application/json",
+          "x-api-key": apiKey,
+          "x-timestamp": timestamp,
+          "x-signature": signature,
+        },
+        body,
+      }
+    );
+    const data = await upstream.json().catch(() => ({}));
+    lastResponse = { upstream, data, path };
+
+    if (upstream.ok) return lastResponse;
+
+    const message = pickString(data, ["error", "message"]) || "";
+    if (!/validation/i.test(message)) return lastResponse;
+  }
+
+  return lastResponse;
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return json(res, 405, { ok: false, error: "Method not allowed" });
@@ -130,43 +227,21 @@ export default async function handler(req, res) {
     });
   }
 
-  const payload = {
-    receiver: {
+  try {
+    const result = await confirmClaimWithUpstream({
+      apiKey,
+      secretKey,
+      reference,
       bankCode,
       accountNumber,
-    },
-  };
-  const body = JSON.stringify(payload);
-  const encodedReference = encodeURIComponent(reference);
-  const path = `${DEFAULT_UPSTREAM_BASE_PATH}/${encodedReference}/claim/confirm`;
-  const timestamp = buildTimestamp();
-  const signature = signRequest({
-    secretKey,
-    method: "POST",
-    path,
-    timestamp,
-    body,
-  });
+    });
+    const upstream = result?.upstream;
+    const data = result?.data || {};
+    const path = result?.path ||
+      `${DEFAULT_UPSTREAM_BASE_PATH}/${encodeURIComponent(reference)}/claim/confirm`;
 
-  try {
-    const upstream = await fetch(
-      `${UPSTREAM_BASE_URL}/${encodedReference}/claim/confirm`,
-      {
-        method: "POST",
-        headers: {
-          accept: "application/json",
-          "content-type": "application/json",
-          "x-api-key": apiKey,
-          "x-timestamp": timestamp,
-          "x-signature": signature,
-        },
-        body,
-      }
-    );
-    const data = await upstream.json().catch(() => ({}));
-
-    if (!upstream.ok) {
-      return json(res, upstream.status, {
+    if (!upstream?.ok) {
+      return json(res, upstream?.status || 502, {
         ok: false,
         reference,
         error: pickString(data, ["error", "message"]) || "Gift claim could not be confirmed.",
