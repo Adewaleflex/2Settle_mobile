@@ -54,6 +54,21 @@ Request:
 }
 ```
 
+`POST /api/gifts/:reference/cancel`
+
+Cancels a pending gift/payment by signing the upstream
+`/v1/payment/:reference/cancel` request server-side.
+
+Response:
+
+```json
+{
+  "ok": true,
+  "reference": "2S-AND6DF",
+  "status": "cancelled"
+}
+```
+
 Response:
 
 ```json
